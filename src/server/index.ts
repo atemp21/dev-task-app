@@ -1,14 +1,29 @@
+import { ApolloServer } from "@apollo/server";
+import { expressMiddleware } from '@apollo/server/express4';
+import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
 import express from "express";
-import sequelize from "./config/config";
+import http from 'http';
+import db from "./config/config";
+import schema from "./graphql";
 
-const app = express();
-const port = process.env.PORT || 3000;
+const start = async () => {
+    const app = express();
+    const port = process.env.PORT || 3000;
+    const httpServer = http.createServer(app);
 
-app.use(express.json());
+    const server = new ApolloServer({
+        schema,
+        plugins: [ApolloServerPluginDrainHttpServer({ httpServer })]
+    });
 
-app.get('/', (req, res) => { res.send("Hello!")});
+    await server.start();
 
-sequelize.authenticate().then(() => {
-    app.listen(port, () => console.log(`App listening on port ${port}`));
-})
-.catch(()=> console.log('Unable to connect to database'))
+    app.use(express.json());
+    app.use(expressMiddleware(server));
+
+    await new Promise<void>((resolve) => httpServer.listen({ port: port }, resolve));
+    console.log(`🚀 Server ready at http://localhost:${port}/graphql`);
+}
+
+db.authenticate();
+start();
